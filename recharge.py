@@ -177,6 +177,7 @@ def create_no_cache_profile():
 
 
 def create_loggers():
+    Path(logs).mkdir(exist_ok=True)
     logger_format = logging.Formatter("[%(asctime)s] %(levelname)-8s | %(message)s")
 
     log_file_handler = TimedRotatingFileHandler("logs/recharge.log", when="D")
@@ -222,12 +223,15 @@ if __name__ == "__main__":
 
     accept_cookies(driver)
 
+    total_count = len(phone_numbers_and_top_ups)
+    results_logger.info("")
+    results_logger.info(f"== {organisation_name} - {total_count} à recharger ==")
+
     success_count = 0
     for phone_number, top_up in phone_numbers_and_top_ups:
         if recharge(phone_number, top_up):
             success_count += 1
 
-    total_count = len(phone_numbers_and_top_ups)
     if success_count == total_count:
         results_logger.info(
             f"{organisation_name} - Toutes les lignes ({total_count}) ont été rechargées"
