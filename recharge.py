@@ -5,6 +5,7 @@ import logging
 import phonenumbers
 import sys
 import time
+import random
 import tkinter as tk
 
 from logging.handlers import TimedRotatingFileHandler
@@ -14,11 +15,10 @@ from pathlib import Path
 from selenium import webdriver
 from selenium.common.exceptions import (
     NoSuchElementException,
-    ElementClickInterceptedException,
     ElementNotInteractableException,
+    WebDriverException
 )
 from selenium.webdriver.common.by import By
-from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
 from selenium.webdriver.firefox.options import Options
 
 from tkinter.messagebox import askretrycancel, showerror, showwarning
@@ -39,7 +39,7 @@ def accept_cookies(driver):
     logger.info("Acceptation des cookies")
     while True:
         try:
-            elem = driver.find_element(By.CSS_SELECTOR, "#CkC > div > a.A").click()
+            driver.find_element(By.CSS_SELECTOR, "#CkC > div > a.A").click()
         except NoSuchElementException as e:
             error_message = "Erreur lors de l'acceptation des cookies"
             logger.error(error_message)
@@ -48,6 +48,7 @@ def accept_cookies(driver):
                 logger.debug("Nouvelle tentative d'acceptation des cookies")
             else:
                 logger.info("Programme arrêté manuellement")
+                driver.quit()
                 sys.exit(0)
         else:
             logger.info("Cookies acceptés")
@@ -116,6 +117,7 @@ def enter_phone_number(phone_number):
                 )
             else:
                 logger.info("Programme arrêté manuellement")
+                driver.quit()
                 sys.exit(0)
         else:
             break
@@ -126,7 +128,7 @@ def enter_top_up(top_up):
     while True:
         try:
             entry = driver.find_element(By.NAME, "codeCoupon")
-            entry.send_keys(cltRec)
+            entry.send_keys(top_up)
             driver.find_element(By.CSS_SELECTOR, "#code_coupon_btn_valider").click()
         except (NoSuchElementException, ElementNotInteractableException):
             error_message = f"Erreur avec le code de recharge : {top_up}"
@@ -138,14 +140,26 @@ def enter_top_up(top_up):
                 )
             else:
                 logger.info("Programme arrêté manuellement")
+                driver.quit()
                 sys.exit()
         else:
             break
 
 
 def recharge(phone_number, top_up):
-    driver.get(url)
-    time.sleep(1)
+    try:
+        driver.get(url)
+    except WebDriverException:
+        logger.error("Erreur de chargement de la page")
+        retry = askretrycancel(app_name, f"Erreur de chargement. Réessayer ?")
+        if retry:
+            logger.debug(
+                f"Nouvelle tentative"
+            )
+        else:
+            logger.info("Programme arrêté manuellement")
+            driver.quit()
+            sys.exit()
 
     enter_phone_number(phone_number)
     time.sleep(random.uniform(0.64, 1.28))
@@ -154,17 +168,17 @@ def recharge(phone_number, top_up):
     time.sleep(random.uniform(0.64, 1.28))
 
     try:
-        elem = driver.find_element(By, CSS_SELECTOR, ".nonValide")
+        elem = driver.find_element(By.CSS_SELECTOR, ".nonValide")
     except NoSuchElementException:
         results_logger.info(
             f"{organisation_name} - Ligne rechargée avec succès : {phone_number} / {top_up}"
         )
-        return true
+        return True
     else:
         results_logger.warning(
             f"{organisation_name} - Ligne non rechargée : {phone_number} / {top_up} ({elem.text})"
         )
-        return false
+        return False
 
 
 def create_no_cache_profile():
@@ -227,10 +241,11 @@ if __name__ == "__main__":
     results_logger.info("")
     results_logger.info(f"== {organisation_name} - {total_count} à recharger ==")
 
-    success_count = 0
-    for phone_number, top_up in phone_numbers_and_top_ups:
-        if recharge(phone_number, top_up):
-            success_count += 1
+    success_count = sum(
+        1
+        for phone_number, top_up in phone_numbers_and_top_ups
+        if recharge(phone_number, top_up)
+    )
 
     if success_count == total_count:
         results_logger.info(
@@ -240,3 +255,4 @@ if __name__ == "__main__":
         results_logger.info(
             f"{organisation_name} - Seules {success_count} lignes ont été rechargées sur les {total_count} demandées"
         )
+    driver.quit()
